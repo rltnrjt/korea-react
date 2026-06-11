@@ -1,29 +1,38 @@
-import { useState } from 'react'
-import boardData from '../assets/mock/boardData'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router'
+import { getBoardList, createBoard, deleteBoards } from '../api/boardApi'
 import Pagination from './Pagination'
+import useAuthStore from '../store/authStore'
 
 const PAGE_SIZE = 10
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function Board() {
-  const [list, setList] = useState([...boardData])
-  const [currentPage, setCurrentPage] = useState(1)
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const [list, setList] = useState([])
+  const [totalPages, setTotalPages] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0)
   const [checkedIds, setCheckedIds] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
 
-  const sorted = [...list].sort((a, b) => b.id - a.id)
-  const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
-  const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  function fetchList(page) {
+    getBoardList(page, PAGE_SIZE).then((res) => {
+      setList(res.data.data)
+      setTotalPages(res.data.totalPages)
+    })
+  }
 
-  const allChecked = pageData.length > 0 && pageData.every((row) => checkedIds.includes(row.id))
+  useEffect(() => {
+    fetchList(currentPage)
+  }, [currentPage])
+
+  const pageData = list
+  const allChecked = pageData.length > 0 && pageData.every((row) => checkedIds.includes(row.boardId))
 
   function toggleAll() {
-    const pageIds = pageData.map((row) => row.id)
+    const pageIds = pageData.map((row) => row.boardId)
     if (allChecked) {
       setCheckedIds((prev) => prev.filter((id) => !pageIds.includes(id)))
     } else {
@@ -49,28 +58,53 @@ function Board() {
 
   function handleSave() {
     if (!title.trim()) return
-    const newId = Math.max(...list.map((r) => r.id)) + 1
-    const newItem = { id: newId, title: title.trim(), author: '사용자', views: 0, date: today() }
-    setList((prev) => [newItem, ...prev])
-    setCurrentPage(1)
-    setModalOpen(false)
+    createBoard({ title: title.trim(), contents: content })
+      .then(() => {
+        setModalOpen(false)
+        setCurrentPage(0)
+        fetchList(0)
+      })
+      .catch((err) => {
+        alert(err.response?.data?.message || '저장에 실패했습니다.')
+      })
+  }
+
+  function handleDelete() {
+    if (checkedIds.length === 0) {
+      alert('삭제할 게시글을 선택하십시오.')
+      return
+    }
+    if (!window.confirm('선택된 게시글들을 정말 삭제하시겠습니까?')) return
+    deleteBoards(checkedIds)
+      .then(() => {
+        setCheckedIds([])
+        fetchList(currentPage)
+      })
+      .catch((err) => {
+        alert(err.response?.data?.message || '삭제에 실패했습니다.')
+      })
   }
 
   return (
     <div className="flex flex-col bg-[#F9FAFB] min-h-screen px-20 py-12" style={{ fontFamily: 'Inter, sans-serif' }}>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[28px] font-bold text-[#1A1A1A]">게시판</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={openModal}
-            className="px-4 py-2 bg-[#2563EB] text-white text-[14px] font-medium rounded-md cursor-pointer hover:bg-[#1D4ED8]"
-          >
-            글쓰기
-          </button>
-          <button className="px-4 py-2 bg-[#EF4444] text-white text-[14px] font-medium rounded-md cursor-pointer hover:bg-[#DC2626]">
-            삭제
-          </button>
-        </div>
+        {user && (
+          <div className="flex gap-2">
+            <button
+              onClick={openModal}
+              className="px-4 py-2 bg-[#2563EB] text-white text-[14px] font-medium rounded-md cursor-pointer hover:bg-[#1D4ED8]"
+            >
+              글쓰기
+            </button>
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 bg-[#EF4444] text-white text-[14px] font-medium rounded-md cursor-pointer hover:bg-[#DC2626]"
+            >
+              삭제
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ minHeight: '495px' }}>
@@ -85,25 +119,25 @@ function Board() {
                 <th className="px-4 py-3 text-[13px] font-semibold text-[#6B7280] text-left">글제목</th>
                 <th className="w-28 px-4 py-3 text-[13px] font-semibold text-[#6B7280] text-left">글쓴이</th>
                 <th className="w-24 px-4 py-3 text-[13px] font-semibold text-[#6B7280] text-right">조회수</th>
-                <th className="w-36 px-4 py-3 text-[13px] font-semibold text-[#6B7280] text-right">작성일자</th>
+                <th className="w-36 px-4 py-3 text-[13px] font-semibold text-[#6B7280] text-right">등록일</th>
               </tr>
             </thead>
             <tbody>
               {pageData.map((row) => (
-                <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
+                <tr key={row.boardId} className="border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={checkedIds.includes(row.id)}
-                      onChange={() => toggleOne(row.id)}
+                      checked={checkedIds.includes(row.boardId)}
+                      onChange={() => toggleOne(row.boardId)}
                       className="cursor-pointer"
                     />
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-[#6B7280]">{row.id}</td>
-                  <td className="px-4 py-3 text-[14px] text-[#1A1A1A] cursor-pointer hover:underline">{row.title}</td>
-                  <td className="px-4 py-3 text-[14px] text-[#374151]">{row.author}</td>
-                  <td className="px-4 py-3 text-[14px] text-[#374151] text-right">{row.views}</td>
-                  <td className="px-4 py-3 text-[14px] text-[#374151] text-right">{row.date}</td>
+                  <td className="px-4 py-3 text-[14px] text-[#6B7280]">{row.boardId}</td>
+                  <td className="px-4 py-3 text-[14px] text-[#1A1A1A] cursor-pointer hover:underline" onClick={() => navigate(`/board/${row.boardId}`)}>{row.title}</td>
+                  <td className="px-4 py-3 text-[14px] text-[#374151]">{row.writer}</td>
+                  <td className="px-4 py-3 text-[14px] text-[#374151] text-right">{row.readCount}</td>
+                  <td className="px-4 py-3 text-[14px] text-[#374151] text-right">{row.createAt}</td>
                 </tr>
               ))}
             </tbody>

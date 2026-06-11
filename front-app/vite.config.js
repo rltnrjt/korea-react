@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': {
         target: 'https://sell-books.shop',
         changeOrigin: true,
+        secure: true,
       },
     },
   },

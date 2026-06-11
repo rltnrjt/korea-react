@@ -1,20 +1,29 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { login as loginApi } from '../api/loginApi'
+import useAuthStore from '../store/authStore'
 
 function Login() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const loginStore = useAuthStore((s) => s.login)
+  const [userId, setUserId] = useState('')
+  const [passwd, setPasswd] = useState('')
   const [keepLogin, setKeepLogin] = useState(false)
   const [ipSecurity, setIpSecurity] = useState(true)
   const [emailFocused, setEmailFocused] = useState(false)
   const [passwordFocused, setPasswordFocused] = useState(false)
 
-  const isActive = email.length > 0 && password.length > 0
+  const isActive = userId.length > 0 && passwd.length > 0
 
-  function handleLogin() {
+  async function handleLogin() {
     if (!isActive) return
-    navigate('/')
+    try {
+      const res = await loginApi(userId, passwd)
+      loginStore(res.data)
+      navigate('/')
+    } catch {
+      alert('아이디 또는 비밀번호가 올바르지 않습니다.')
+    }
   }
 
   return (
@@ -40,8 +49,8 @@ function Login() {
             <input
               type="text"
               placeholder="아이디 또는 전화번호"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
               onFocus={() => setEmailFocused(true)}
               onBlur={() => setEmailFocused(false)}
               className="w-full text-[14px] text-[#1E1E1E] outline-none bg-transparent placeholder:text-[#999999]"
@@ -61,8 +70,9 @@ function Login() {
             <input
               type="password"
               placeholder="비밀번호"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={passwd}
+              onChange={(e) => setPasswd(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleLogin() }}
               onFocus={() => setPasswordFocused(true)}
               onBlur={() => setPasswordFocused(false)}
               className="w-full text-[14px] text-[#1E1E1E] outline-none bg-transparent placeholder:text-[#999999]"
